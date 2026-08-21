@@ -4,9 +4,10 @@ import path from 'path';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 
-const MONGODB_URI = process.env.MONGODB_URI!;
+const MONGODB_URI = process.argv[2] || process.env.MONGODB_URI!;
 if (!MONGODB_URI) {
-  console.error('MONGODB_URI not found in .env.local');
+  console.error('Usage: npx tsx scripts/seedTemplates.ts "mongodb+srv://..."');
+  console.error('Or set MONGODB_URI in .env.local');
   process.exit(1);
 }
 

@@ -43,3 +43,7 @@ next-env.d.ts
 Requirements.md
 .claude
 desktop.ini
+
+# sensitive: production data export & plaintext credentials — never commit
+/proddata
+users.txt
