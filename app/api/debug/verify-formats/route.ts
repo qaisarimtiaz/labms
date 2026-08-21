@@ -1,9 +1,21 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import connectDB from '@/lib/mongodb';
 import LabTest from '@/lib/models/LabTest';
 
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const userRole = (session.user as { role: string }).role;
+    if (!['admin', 'lab_tech'].includes(userRole)) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+
     await connectDB();
 
     // Get the 9 tests we updated

@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import connectDB from '@/lib/mongodb';
 import LabTest from '@/lib/models/LabTest';
 
@@ -30,6 +32,16 @@ const TEST_FORMAT_MAPPINGS: Record<string, string> = {
 
 export async function POST() {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const userRole = (session.user as { role: string }).role;
+    if (userRole !== 'admin') {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+
     await connectDB();
 
     const updates = [];

@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import connectDB from '@/lib/mongodb';
 import User from '@/lib/models/User';
 import Patient from '@/lib/models/Patient';
@@ -9,6 +11,16 @@ import TestResult from '@/lib/models/TestResult';
 
 export async function POST() {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const userRole = (session.user as { role: string }).role;
+    if (userRole !== 'admin') {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+
     await connectDB();
 
     const existingAdmin = await User.findOne({ email: 'admin@lab.com' });

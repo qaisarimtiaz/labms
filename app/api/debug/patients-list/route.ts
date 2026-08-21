@@ -1,12 +1,24 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import connectDB from '@/lib/mongodb';
 import Patient from '@/lib/models/Patient';
 
 // Debug endpoint to list all patients
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const userRole = (session.user as { role: string }).role;
+    if (!['admin', 'lab_tech'].includes(userRole)) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+
     console.log('Debug patients list API called');
-    
+
     await connectDB();
     
     const patients = await Patient.find({})
