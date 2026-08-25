@@ -222,7 +222,7 @@ export default function CompletedTests() {
 
       const reportHeaderHTML = `
         <div style="border-bottom: 4px solid #000; margin-bottom: 16px;"></div>
-        <div style="text-align: center; margin-bottom: 16px; padding-bottom: 12px;"><div style="display: flex; justify-content: center; margin-bottom: 8px; width: 100%;"><img src="/Full_logo.jpg" alt="Health Inn Services" style="max-width: 180px; height: auto;" width="180" height="70"></div></div>
+        <div style="width: 100%; margin-bottom: 12px;"><img src="/Full_logo.jpg" alt="Health Inn Services" style="width: 100%; height: auto; display: block;" /></div>
         <div style="text-align: center; margin-bottom: 16px; background-color: #000; color: #fff; padding: 8px 0;"><h1 style="font-size: 16px; font-weight: bold; margin: 0;">LABORATORY TEST REPORT</h1></div>
         <div style="text-align: right; margin-bottom: 16px; font-size: 14px;"><span style="font-weight: 500;">Date: ${new Date(order.createdAt).toLocaleDateString('en-GB')}</span></div>
       `;
@@ -570,10 +570,8 @@ export default function CompletedTests() {
                 <div className="border-b-4 border-gray-800 mb-4"></div>
 
                 {/* Report Header */}
-                <div className="text-center mb-4 pb-3">
-                  <div className="flex justify-center mb-2 w-full">
-                    <Image src="/Full_logo.jpg" alt="Health Inn Services" className="object-contain" style={{ maxWidth: '180px', height: 'auto' }} width={180} height={70} />
-                  </div>
+                <div className="w-full mb-4">
+                  <Image src="/Full_logo.jpg" alt="Health Inn Services" style={{ width: '100%', height: 'auto' }} width={4456} height={594} />
                 </div>
 
                 {/* Center Title */}
