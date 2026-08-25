@@ -2,12 +2,12 @@ import nodemailer from 'nodemailer';
 
 // Email configuration from environment variables
 const emailConfig = {
-  host: process.env.EMAIL_HOST || 'softsols.it.com',
+  host: process.env.EMAIL_HOST,
   port: parseInt(process.env.EMAIL_PORT || '465'),
   secure: process.env.EMAIL_SECURE === 'true' ? true : (process.env.EMAIL_PORT === '465' ? true : false),
   auth: {
-    user: process.env.EMAIL_USER || 'noreply@softsols.it.com',
-    pass: process.env.EMAIL_PASSWORD || 'Pak8a0PaG6haj8Y7',
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASSWORD,
   },
   // Add additional SMTP options for better compatibility
   tls: {
@@ -51,14 +51,14 @@ export const sendReportNotification = async (data: EmailNotificationData): Promi
     console.log('Order:', orderNumber);
 
     const mailOptions = {
-      from: `"Health Inn Services Laboratory" <${process.env.EMAIL_FROM || 'noreply@softsols.it.com'}>`,
+      from: `"Health Inn Services Laboratory" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
       to: patient.email,
       subject: `Lab Report Ready - Order #${orderNumber}`,
-      replyTo: process.env.EMAIL_FROM || 'noreply@softsols.it.com',
+      replyTo: process.env.EMAIL_FROM || process.env.EMAIL_USER,
       headers: {
         'X-Mailer': 'Health Inn Services Laboratory System',
         'X-Priority': '3',
-        'Message-ID': `<${Date.now()}.${patient.patientId}.${orderNumber}@softsols.it.com>`,
+        'Message-ID': `<${Date.now()}.${patient.patientId}.${orderNumber}@${process.env.EMAIL_HOST || 'localhost'}>`,
       },
       html: `
         <!DOCTYPE html>
@@ -92,7 +92,7 @@ export const sendReportNotification = async (data: EmailNotificationData): Promi
             <div style="background-color: #fff3cd; padding: 15px; margin: 20px 0; border-radius: 5px; border-left: 4px solid #ffc107;">
               <p style="margin: 0;"><strong>Contact Information:</strong><br>
               Health Inn Services Laboratory<br>
-              Email: ${process.env.EMAIL_FROM || 'noreply@softsols.it.com'}</p>
+              Email: ${process.env.EMAIL_FROM || process.env.EMAIL_USER}</p>
             </div>
 
             <div style="background-color: #f8d7da; padding: 15px; margin: 20px 0; border-radius: 5px; border-left: 4px solid #dc3545;">
@@ -124,7 +124,7 @@ Please contact our laboratory to collect your printed report or discuss your res
 
 Contact Information:
 Health Inn Services Laboratory
-Email: ${process.env.EMAIL_FROM || 'noreply@softsols.it.com'}
+Email: ${process.env.EMAIL_FROM || process.env.EMAIL_USER}
 
 Important: This is an automated notification. Please do not reply to this email. 
 For medical advice or questions about your results, please contact our laboratory directly.
