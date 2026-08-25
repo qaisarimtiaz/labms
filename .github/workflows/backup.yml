@@ -1,0 +1,28 @@
+name: Daily Database Backup
+
+on:
+  schedule:
+    # 21:00 UTC = 02:00 AM PKT (UTC+5) - low-traffic window for the lab
+    - cron: '0 21 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install pymongo cloudinary
+
+      - name: Run backup
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+          CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+        run: python scripts/backup_to_cloudinary.py
