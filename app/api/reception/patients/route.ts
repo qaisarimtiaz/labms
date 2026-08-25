@@ -111,22 +111,35 @@ export async function POST(req: NextRequest) {
     let generatedEmail = email;
     let generatedPassword = password;
 
-    // Auto-generate email if not provided
+    // Auto-generate email if not provided.
+    // Find the highest existing "p<N>@health.inn.com" counter in one query
+    // instead of probing p1, p2, p3... sequentially (which got slower as the
+    // patient list grew, since it always restarted the search from 1).
     if (!email) {
-      let counter = 1;
-      let uniqueEmail = '';
-      let emailExists = true;
+      const [highest] = await User.aggregate([
+        { $match: { email: { $regex: /^p\d+@health\.inn\.com$/i } } },
+        {
+          $project: {
+            num: {
+              $toInt: {
+                $substrCP: ['$email', 1, { $subtract: [{ $indexOfCP: ['$email', '@'] }, 1] }]
+              }
+            }
+          }
+        },
+        { $sort: { num: -1 } },
+        { $limit: 1 }
+      ]);
 
-      while (emailExists) {
+      let counter = (highest?.num || 0) + 1;
+      let uniqueEmail = `p${counter}@health.inn.com`;
+
+      // Guard against a rare race with a concurrent request picking the same counter.
+      while (await User.findOne({ email: uniqueEmail })) {
+        counter++;
         uniqueEmail = `p${counter}@health.inn.com`;
-        const existingEmailUser = await User.findOne({ email: uniqueEmail });
-        if (!existingEmailUser) {
-          emailExists = false;
-          generatedEmail = uniqueEmail;
-        } else {
-          counter++;
-        }
       }
+      generatedEmail = uniqueEmail;
     } else {
       // Check if provided email already exists
       const existingUser = await User.findOne({ email: email.toLowerCase().trim() });

@@ -106,6 +106,7 @@ export default function PatientRegistration() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return; // guard against double-submit (double-click, Enter key repeat, etc.)
     setLoading(true);
     setError('');
     setSuccess('');
