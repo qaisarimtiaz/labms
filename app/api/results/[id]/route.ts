@@ -3,6 +3,10 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import connectDB from '@/lib/mongodb';
 import TestResult from '@/lib/models/TestResult';
+import '@/lib/models/TestOrder';
+import '@/lib/models/LabTest';
+import '@/lib/models/Patient';
+import '@/lib/models/User';
 import mongoose from 'mongoose';
 
 export async function GET(

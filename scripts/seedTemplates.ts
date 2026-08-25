@@ -31,6 +31,31 @@ const TestTemplateSchema = new mongoose.Schema({
 const TestTemplate = mongoose.models.TestTemplate ||
   mongoose.model('TestTemplate', TestTemplateSchema);
 
+const LabTestSchema = new mongoose.Schema({
+  code: { type: String, required: true, trim: true },
+  name: { type: String, required: true, trim: true },
+  price: { type: Number, required: true, min: 0 },
+  description: { type: String, trim: true, default: '' },
+  type: { type: String, trim: true, default: '' },
+  reportFormat: { type: String, trim: true, default: 'standard' },
+  template: { type: mongoose.Schema.Types.ObjectId, ref: 'TestTemplate', default: null }
+}, { timestamps: true });
+
+const LabTest = mongoose.models.LabTest || mongoose.model('LabTest', LabTestSchema);
+
+// Maps each legacy reportFormat code to the templateName that replaces it below.
+const REPORT_FORMAT_TO_TEMPLATE: Record<string, string> = {
+  'ana-23': 'ANA Profile 23 Ag',
+  'ana-mi2': 'ANA Profile 18 Ag',
+  'autoimmune-liver': 'Autoimmune Liver Disease Profile',
+  'ena': 'ENA Profile',
+  'myopathies': 'Myositis / Myopathies Profile',
+  'myopathies-hmgcr': 'Myositis / Myopathies with HMGCR Profile',
+  'neuronal-profile': 'Neuronal Antigens Profile',
+  'paraneoplastic-profile': 'Paraneoplastic Syndrome Profile',
+  'systemic-sclerosis': 'Systemic Sclerosis Profile'
+};
+
 // ── Template data extracted from PDFs ──────────────────────────────────────
 const templates = [
   {
@@ -235,16 +260,18 @@ async function seed() {
 
   let created = 0;
   let skipped = 0;
+  const templateIdByName: Record<string, mongoose.Types.ObjectId> = {};
 
   for (const t of templates) {
     const existing = await TestTemplate.findOne({ templateName: t.templateName });
     if (existing) {
       console.log(`  SKIP  "${t.templateName}" (already exists)`);
+      templateIdByName[t.templateName] = existing._id;
       skipped++;
       continue;
     }
 
-    await TestTemplate.create({
+    const doc = await TestTemplate.create({
       templateName: t.templateName,
       category: t.category,
       parameters: t.parameters.map((p, i) => ({
@@ -255,12 +282,34 @@ async function seed() {
         sequenceOrder: i
       }))
     });
+    templateIdByName[t.templateName] = doc._id;
 
     console.log(`  OK    "${t.templateName}" — ${t.parameters.length} parameters`);
     created++;
   }
 
-  console.log(`\nDone. Created: ${created}  Skipped: ${skipped}`);
+  console.log(`\nTemplates — Created: ${created}  Skipped: ${skipped}`);
+
+  // ── Link matching lab tests to their template ─────────────────────────────
+  // Only tests still on the legacy static reportFormat lookup (no template
+  // assigned yet) are linked, so manually-assigned templates are never overwritten.
+  console.log('\nLinking lab tests to templates...');
+  let linked = 0;
+  for (const [reportFormat, templateName] of Object.entries(REPORT_FORMAT_TO_TEMPLATE)) {
+    const templateId = templateIdByName[templateName];
+    if (!templateId) continue;
+
+    const result = await LabTest.updateMany(
+      { reportFormat, template: null },
+      { $set: { template: templateId } }
+    );
+    if (result.modifiedCount > 0) {
+      console.log(`  LINK  ${result.modifiedCount} test(s) with reportFormat "${reportFormat}" -> "${templateName}"`);
+      linked += result.modifiedCount;
+    }
+  }
+
+  console.log(`\nDone. Templates created: ${created}, skipped: ${skipped}. Lab tests linked: ${linked}.`);
   await mongoose.disconnect();
 }
 
