@@ -578,7 +578,7 @@ export default function CompletedTests() {
 
             {/* Modal Content - Report Style */}
             <div className="p-8 overflow-y-auto max-h-[calc(100vh-200px)]">
-              <div className="bg-white border rounded-lg p-8" style={{ fontFamily: 'Arial, sans-serif' }}>
+              <div className="bg-white border rounded-lg p-8" style={{ fontFamily: 'Arial, sans-serif', minHeight: '297mm', display: 'flex', flexDirection: 'column' }}>
                 {/* Top Border Line */}
                 <div className="border-b-4 border-gray-800 mb-4"></div>
 
@@ -706,17 +706,21 @@ export default function CompletedTests() {
                   )}
                 </div>
 
-                {/* Bottom Line and Footer */}
-                <div className="border-b-2 border-gray-700 my-4"></div>
+                {/* Bottom Line and Footer — margin-top:auto pins this to the
+                    bottom of the min-height:297mm container above, regardless
+                    of how little content precedes it */}
+                <div style={{ marginTop: 'auto' }}>
+                  <div className="border-b-2 border-gray-700 my-4"></div>
 
-                {/* Footer with Verification */}
-                <div className="text-xs text-gray-700">
-                  <p className="text-center mb-2">
-                    Electronically issued test report duly verified by pathologist, no signature required.
-                  </p>
-                  <p className="text-center text-gray-600">
-                    Office No. 101, Building No. 60-C, Zulfiqar Commercial Street No. 04, Phase VIII DHA, Karachi, Pakistan
-                  </p>
+                  {/* Footer with Verification */}
+                  <div className="text-xs text-gray-700">
+                    <p className="text-center mb-2">
+                      Electronically issued test report duly verified by pathologist, no signature required.
+                    </p>
+                    <p className="text-center text-gray-600">
+                      Office No. 101, Building No. 60-C, Zulfiqar Commercial Street No. 04, Phase VIII DHA, Karachi, Pakistan
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
