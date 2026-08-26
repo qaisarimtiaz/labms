@@ -176,6 +176,12 @@ export default function CompletedOrders() {
       const margin = 15;
       const contentWidth = a4Width - (margin * 2);
 
+      // Full A4 page height (minus top/bottom margin) expressed as a ratio of the
+      // rendered width, so a page with little content still fills a full page
+      // instead of collapsing to fit just the content — that's what pins the
+      // footer to the bottom rather than right after a short table.
+      const pageAspectRatio = (297 - margin * 2) / (a4Width - margin * 2);
+
       const renderPageInIframe = (html: string): Promise<HTMLCanvasElement> => {
         return new Promise((resolve, reject) => {
           const div = document.createElement('div');
@@ -184,8 +190,15 @@ export default function CompletedOrders() {
           div.style.width = '210mm';
           div.style.padding = '15mm';
           div.style.backgroundColor = '#ffffff';
+          div.style.display = 'flex';
+          div.style.flexDirection = 'column';
           div.innerHTML = html;
           document.body.appendChild(div);
+          // min-height sets the content-box height, which excludes padding —
+          // subtract it so the total rendered box (content + padding) matches
+          // a full A4 page, not a full page plus an extra padding's worth.
+          const verticalPadding = parseFloat(getComputedStyle(div).paddingTop) + parseFloat(getComputedStyle(div).paddingBottom);
+          div.style.minHeight = `${div.offsetWidth * pageAspectRatio - verticalPadding}px`;
 
           // Wait for images to load
           setTimeout(async () => {
@@ -263,7 +276,7 @@ export default function CompletedOrders() {
         }
         pageHTML += testResultHTML;
         if (isLastTest) {
-          pageHTML += reportFooterHTML;
+          pageHTML += `<div style="margin-top: auto;">${reportFooterHTML}</div>`;
         }
 
         const canvas = await renderPageInIframe(pageHTML);
