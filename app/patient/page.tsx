@@ -159,7 +159,7 @@ export default function PatientDashboard() {
           setTimeout(async () => {
             try {
               const canvas = await html2canvas(div, {
-                scale: 2,
+                scale: 1.5,
                 useCORS: true,
                 backgroundColor: '#ffffff',
                 allowTaint: true
@@ -235,13 +235,13 @@ export default function PatientDashboard() {
         }
 
         const canvas = await renderPageInIframe(pageHTML);
-        const imgData = canvas.toDataURL('image/png');
+        const imgData = canvas.toDataURL('image/jpeg', 0.88);
         const imgHeight = (canvas.height * contentWidth) / canvas.width;
 
         if (i > 0) {
           pdf.addPage();
         }
-        pdf.addImage(imgData, 'PNG', margin, margin, contentWidth, imgHeight > 297 - (margin*2) ? 297 - (margin*2) : imgHeight);
+        pdf.addImage(imgData, 'JPEG', margin, margin, contentWidth, imgHeight > 297 - (margin*2) ? 297 - (margin*2) : imgHeight);
       }
 
       const pdfDataUri = pdf.output('dataurlstring');
