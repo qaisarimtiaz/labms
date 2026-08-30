@@ -27,6 +27,7 @@ export default function SimpleResultsManagement() {
   const [loading, setLoading] = useState(true);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<TestOrder | null>(null);
+  const [selectedTestId, setSelectedTestId] = useState<string>('');
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
 
@@ -37,7 +38,7 @@ export default function SimpleResultsManagement() {
   const fetchProcessingOrders = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/orders?orderStatus=in_progress');
+      const response = await fetch('/api/orders?orderStatus=in_progress,partially_reported');
       if (response.ok) {
         const data = await response.json();
         setProcessingOrders(data.orders || []);
@@ -67,18 +68,21 @@ export default function SimpleResultsManagement() {
       alert('Please select at least one image');
       return;
     }
+    if (!selectedTestId) {
+      alert('Please select which test this result is for');
+      return;
+    }
 
     setUploading(true);
     try {
-      
-      // For now, let's just complete the order without actually uploading images
-      // We'll create a simple result record first
+
+      // For now, let's just save the result without actually uploading images
       const resultResponse = await fetch('/api/results', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           testOrder: selectedOrder._id,
-          test: selectedOrder.tests[0]._id, // Use first test for simplicity
+          test: selectedTestId,
           patient: selectedOrder.patient._id,
           resultData: [{
             parameter: 'Lab Report',
@@ -99,29 +103,31 @@ export default function SimpleResultsManagement() {
         throw new Error(`Failed to save result: ${errorData.error || 'Unknown error'}`);
       }
 
-
-      // Mark order as completed
+      // Let the order status be derived from however many of its tests now
+      // have a result, instead of force-closing the whole order — a test
+      // still remains reportable on its own even if others are pending.
       const orderResponse = await fetch(`/api/orders/${selectedOrder._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderStatus: 'completed' })
+        body: JSON.stringify({ recomputeStatus: true })
       });
 
       if (!orderResponse.ok) {
         const errorData = await orderResponse.json();
-        console.error('Order completion failed:', errorData);
-        throw new Error(`Failed to complete order: ${errorData.error || 'Unknown error'}`);
+        console.error('Order status update failed:', errorData);
+        throw new Error(`Failed to update order status: ${errorData.error || 'Unknown error'}`);
       }
 
 
-      alert('Order completed successfully!');
+      alert('Result uploaded successfully!');
       setShowUploadModal(false);
       setSelectedOrder(null);
+      setSelectedTestId('');
       setSelectedImages([]);
       fetchProcessingOrders(); // Refresh list
 
     } catch (error) {
-      console.error('Error completing order:', error);
+      console.error('Error uploading result:', error);
       alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setUploading(false);
@@ -203,11 +209,12 @@ export default function SimpleResultsManagement() {
                 <button
                   onClick={() => {
                     setSelectedOrder(order);
+                    setSelectedTestId(order.tests.length === 1 ? order.tests[0]._id : '');
                     setShowUploadModal(true);
                   }}
                   className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium"
                 >
-                  Upload Results & Complete
+                  Upload Result
                 </button>
               </div>
             </div>
@@ -233,6 +240,7 @@ export default function SimpleResultsManagement() {
         onClose={() => {
           setShowUploadModal(false);
           setSelectedOrder(null);
+          setSelectedTestId('');
           setSelectedImages([]);
         }}
         title="Upload Results"
@@ -249,6 +257,29 @@ export default function SimpleResultsManagement() {
                   <span className="font-medium">Patient:</span> {selectedOrder.patient.firstName} {selectedOrder.patient.lastName}
                 </div>
               </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Which test is this result for?
+              </label>
+              <select
+                value={selectedTestId}
+                onChange={(e) => setSelectedTestId(e.target.value)}
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              >
+                <option value="">Select a test&hellip;</option>
+                {selectedOrder.tests.map((test) => (
+                  <option key={test._id} value={test._id}>
+                    {test.testName} ({test.testCode})
+                  </option>
+                ))}
+              </select>
+              {selectedOrder.tests.length > 1 && (
+                <p className="mt-1 text-xs text-gray-500">
+                  This order has {selectedOrder.tests.length} tests &mdash; the other tests can be uploaded separately, whenever they&apos;re ready.
+                </p>
+              )}
             </div>
 
             <div className="mb-4">
@@ -291,6 +322,7 @@ export default function SimpleResultsManagement() {
                 onClick={() => {
                   setShowUploadModal(false);
                   setSelectedOrder(null);
+                  setSelectedTestId('');
                   setSelectedImages([]);
                 }}
                 className="px-4 py-2 border rounded-lg hover:bg-gray-50"
@@ -300,10 +332,10 @@ export default function SimpleResultsManagement() {
               </button>
               <button
                 onClick={uploadResultsAndComplete}
-                disabled={selectedImages.length === 0 || uploading}
+                disabled={selectedImages.length === 0 || !selectedTestId || uploading}
                 className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {uploading ? 'Uploading...' : 'Upload & Complete'}
+                {uploading ? 'Uploading...' : 'Upload Result'}
               </button>
             </div>
           </>

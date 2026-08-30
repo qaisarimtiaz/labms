@@ -19,7 +19,7 @@ interface TestOrder {
     name: string;
     price?: number;
   }[];
-  orderStatus: 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
+  orderStatus: 'pending' | 'confirmed' | 'in_progress' | 'partially_reported' | 'completed' | 'cancelled';
   priority: 'normal' | 'urgent' | 'stat';
   totalAmount: number;
   paidAmount: number;
@@ -51,7 +51,7 @@ export default function UnifiedLabWorkflow() {
   const [orders, setOrders] = useState<TestOrder[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<TestOrder[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'confirmed' | 'in_progress' | 'completed'>('all');
+  const [filter, setFilter] = useState<'all' | 'pending' | 'confirmed' | 'in_progress' | 'partially_reported' | 'completed'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<'all' | 'normal' | 'urgent' | 'stat'>('all');
   
@@ -161,6 +161,29 @@ export default function UnifiedLabWorkflow() {
     }
   };
 
+  // Derives the order's status from however many of its tests currently have
+  // a reported result, instead of setting a fixed status directly — so
+  // entering one test's result never force-closes the rest of the order.
+  const recomputeOrderStatus = async (orderId: string) => {
+    try {
+      const response = await fetch(`/api/orders/${orderId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recomputeStatus: true })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update order status');
+      }
+
+      return response.json();
+    } catch (error) {
+      console.error('Error recomputing order status:', error);
+      throw error;
+    }
+  };
+
   const handleStartProcessing = async (order: TestOrder) => {
     try {
       await updateOrderStatus(order._id, 'in_progress');
@@ -225,6 +248,7 @@ export default function UnifiedLabWorkflow() {
       });
 
       if (response.ok) {
+        await recomputeOrderStatus(selectedOrder._id);
         setShowResultModal(false);
         resetForms();
         fetchOrders();
@@ -294,11 +318,12 @@ export default function UnifiedLabWorkflow() {
 
       await Promise.all(resultPromises);
 
-      // Mark order as completed
-      await updateOrderStatus(selectedOrder._id, 'completed');
+      // Let the order status reflect however many tests now have a result
+      await recomputeOrderStatus(selectedOrder._id);
       setShowImageUploadModal(false);
       resetForms();
-      alert('Results uploaded and order completed successfully!');
+      fetchOrders();
+      alert('Results uploaded successfully!');
     } catch (error) {
       console.error('Error uploading results:', error);
       alert(`Error uploading results: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -391,6 +416,7 @@ export default function UnifiedLabWorkflow() {
       pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
       confirmed: 'bg-blue-100 text-blue-800 border-blue-200',
       in_progress: 'bg-purple-100 text-purple-800 border-purple-200',
+      partially_reported: 'bg-amber-100 text-amber-800 border-amber-200',
       completed: 'bg-green-100 text-green-800 border-green-200',
       cancelled: 'bg-red-100 text-red-800 border-red-200'
     };
@@ -411,6 +437,7 @@ export default function UnifiedLabWorkflow() {
       all: orders.length,
       pending: orders.filter(o => o.orderStatus === 'pending').length,
       in_progress: orders.filter(o => o.orderStatus === 'in_progress').length,
+      partially_reported: orders.filter(o => o.orderStatus === 'partially_reported').length,
       completed: orders.filter(o => o.orderStatus === 'completed').length
     };
   };
@@ -523,11 +550,12 @@ export default function UnifiedLabWorkflow() {
                 { key: 'all', label: `All (${statusCounts.all})` },
                 { key: 'pending', label: `Pending (${statusCounts.pending})` },
                 { key: 'in_progress', label: `In Progress (${statusCounts.in_progress})` },
+                { key: 'partially_reported', label: `Partially Reported (${statusCounts.partially_reported})` },
                 { key: 'completed', label: `Completed (${statusCounts.completed})` }
               ].map(item => (
                 <button
                   key={item.key}
-                  onClick={() => setFilter(item.key as 'all' | 'pending' | 'in_progress' | 'completed')}
+                  onClick={() => setFilter(item.key as 'all' | 'pending' | 'in_progress' | 'partially_reported' | 'completed')}
                   className={`px-2 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${
                     filter === item.key
                       ? 'bg-green-600 text-white'

@@ -7,7 +7,9 @@ import '@/lib/models/Patient';
 import '@/lib/models/LabTest';
 import '@/lib/models/TestPackage';
 import '@/lib/models/User';
+import '@/lib/models/TestResult';
 import mongoose from 'mongoose';
+import { recomputeOrderStatus } from '@/lib/reporting/orderStatusService';
 
 export async function GET(
   request: NextRequest,
@@ -179,7 +181,8 @@ export async function PUT(
       notes,
       paidAmount,
       paymentMethod,
-      reportPDF
+      reportPDF,
+      recomputeStatus
     } = body;
 
     // Log incoming data for debugging
@@ -194,19 +197,22 @@ export async function PUT(
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    // Validate status transitions
-    if (orderStatus && orderStatus !== order.orderStatus) {
+    // Validate status transitions (skipped when recomputeStatus is used — that
+    // path derives status from actual results rather than accepting a
+    // caller-supplied target status)
+    if (!recomputeStatus && orderStatus && orderStatus !== order.orderStatus) {
       const validTransitions: Record<string, string[]> = {
         'pending': ['confirmed', 'in_progress', 'cancelled'],
         'confirmed': ['in_progress', 'cancelled'],
-        'in_progress': ['completed', 'cancelled'],
+        'in_progress': ['partially_reported', 'completed', 'cancelled'],
+        'partially_reported': ['in_progress', 'completed', 'cancelled'],
         'completed': [],
         'cancelled': []
       };
 
       if (!validTransitions[order.orderStatus].includes(orderStatus)) {
-        return NextResponse.json({ 
-          error: `Cannot change status from ${order.orderStatus} to ${orderStatus}` 
+        return NextResponse.json({
+          error: `Cannot change status from ${order.orderStatus} to ${orderStatus}`
         }, { status: 400 });
       }
     }
@@ -214,7 +220,7 @@ export async function PUT(
     // Update payment amount if provided
     const updateData: Record<string, unknown> = {};
 
-    if (orderStatus) updateData.orderStatus = orderStatus;
+    if (!recomputeStatus && orderStatus) updateData.orderStatus = orderStatus;
     if (priority) updateData.priority = priority;
     if (sampleCollectionDate) updateData.sampleCollectionDate = new Date(sampleCollectionDate);
     if (expectedReportDate) updateData.expectedReportDate = new Date(expectedReportDate);
@@ -235,11 +241,15 @@ export async function PUT(
       updateData.paidAmount = Math.max(0, Math.min(paidAmount, order.totalAmount));
     }
 
-    const updatedOrder = await TestOrder.findByIdAndUpdate(
-      id,
-      updateData,
-      { new: true, runValidators: false }
-    ).populate([
+    if (Object.keys(updateData).length > 0) {
+      await TestOrder.findByIdAndUpdate(id, updateData, { new: true, runValidators: false });
+    }
+
+    if (recomputeStatus) {
+      await recomputeOrderStatus(id);
+    }
+
+    const updatedOrder = await TestOrder.findById(id).populate([
       { path: 'patient', select: 'firstName lastName email phone patientId dateOfBirth gender' },
       { path: 'tests', select: 'code name price description' },
       { path: 'packages', select: 'packageName price' },

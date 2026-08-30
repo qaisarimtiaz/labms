@@ -10,7 +10,7 @@ export interface ITestOrder extends Document {
   discount: number;
   paymentStatus: 'pending' | 'partial' | 'paid';
   paymentMethod: 'cash' | 'card' | 'online';
-  orderStatus: 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
+  orderStatus: 'pending' | 'confirmed' | 'in_progress' | 'partially_reported' | 'completed' | 'cancelled';
   priority: 'normal' | 'urgent' | 'stat';
   referredByDoctor?: string;
   sampleCollectionDate?: Date;
@@ -73,7 +73,7 @@ const TestOrderSchema = new Schema<ITestOrder>({
   orderStatus: {
     type: String,
     required: true,
-    enum: ['pending', 'confirmed', 'in_progress', 'completed', 'cancelled'],
+    enum: ['pending', 'confirmed', 'in_progress', 'partially_reported', 'completed', 'cancelled'],
     default: 'pending'
   },
   priority: {

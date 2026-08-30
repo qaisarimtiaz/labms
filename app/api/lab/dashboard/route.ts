@@ -30,9 +30,10 @@ export async function GET() {
     });
     console.log('Pending tests found:', pendingTests);
 
-    // Get in-progress tests
+    // Get in-progress tests (including partially-reported orders, which
+    // still have tests left to process)
     const inProgressTests = await TestOrder.countDocuments({
-      orderStatus: 'in_progress'
+      orderStatus: { $in: ['in_progress', 'partially_reported'] }
     });
     console.log('In-progress tests found:', inProgressTests);
 
@@ -47,7 +48,7 @@ export async function GET() {
 
     // Get total samples (approximating as total test orders)
     const totalSamples = await TestOrder.countDocuments({
-      orderStatus: { $in: ['pending', 'confirmed', 'in_progress', 'completed'] }
+      orderStatus: { $in: ['pending', 'confirmed', 'in_progress', 'partially_reported', 'completed'] }
     });
     console.log('Total samples found:', totalSamples);
 

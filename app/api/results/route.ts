@@ -107,15 +107,17 @@ export async function POST(request: NextRequest) {
 
     await connectDB();
 
-    // Verify test order exists and is in progress
+    // Verify test order exists and is still open for results — an order
+    // stays open until every test on it has been reported, so a
+    // partially_reported order must still accept its remaining tests.
     const order = await TestOrder.findById(testOrder);
     if (!order) {
       return NextResponse.json({ error: 'Test order not found' }, { status: 404 });
     }
 
-    if (order.orderStatus !== 'in_progress') {
-      return NextResponse.json({ 
-        error: 'Results can only be added to orders in progress' 
+    if (!['in_progress', 'partially_reported'].includes(order.orderStatus)) {
+      return NextResponse.json({
+        error: 'Results can only be added to orders that are in progress or partially reported'
       }, { status: 400 });
     }
 

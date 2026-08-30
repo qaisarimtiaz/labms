@@ -127,8 +127,9 @@ export async function POST(request: NextRequest) {
       doc.setTextColor(255, 255, 255);
       doc.text('LABORATORY TEST REPORT', pageWidth / 2, headerY + barHeight / 2 + 2.5, { align: 'center' });
       doc.setTextColor(0, 0, 0);
+      headerY += barHeight + 4;
 
-      return headerY + barHeight + 4;
+      return headerY;
     };
 
     // Helper function to add footer on every page

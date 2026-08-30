@@ -21,6 +21,7 @@ interface TestResult {
     referredByDoctor?: string;
     createdAt: string;
     priority: string;
+    tests?: { _id: string }[];
   };
   test: {
     _id: string;
@@ -89,8 +90,10 @@ export default function ReportGeneration() {
     try {
       setLoading(true);
       
-      // Get all in-progress orders with populated patient data (same as WorkQueue)
-      const ordersResponse = await fetch('/api/orders?orderStatus=in_progress');
+      // Get all in-progress AND partially-reported orders with populated
+      // patient data (same as WorkQueue) — a partially-reported order still
+      // has tests left to report on, so it must stay in this list.
+      const ordersResponse = await fetch('/api/orders?orderStatus=in_progress,partially_reported');
       if (!ordersResponse.ok) {
         throw new Error('Failed to fetch orders');
       }
@@ -145,32 +148,27 @@ export default function ReportGeneration() {
       });
 
       const a4Width = 210;
-      const margin = 15;
-      const contentWidth = a4Width - (margin * 2);
-
-      // Full A4 page height (minus top/bottom margin) expressed as a ratio of the
-      // rendered width, so a page with little content still fills a full page
-      // instead of collapsing to fit just the content — that's what pins the
-      // footer to the bottom rather than right after a short table.
-      const pageAspectRatio = (297 - margin * 2) / (a4Width - margin * 2);
+      const a4Height = 297;
 
       const renderPageInIframe = (html: string): Promise<HTMLCanvasElement> => {
         return new Promise((resolve, reject) => {
           const div = document.createElement('div');
           div.style.position = 'absolute';
           div.style.left = '-9999px';
+          // border-box makes the div's rendered size exactly 210mm x >=297mm —
+          // a full A4 page with its 15mm padding acting as the page margin —
+          // so the captured canvas maps 1:1 onto the PDF page with no separate
+          // margin/ratio math needed, and a short page still fills the page
+          // height (pinning the footer to the true bottom via margin-top:auto).
+          div.style.boxSizing = 'border-box';
           div.style.width = '210mm';
+          div.style.minHeight = '297mm';
           div.style.padding = '15mm';
           div.style.backgroundColor = '#ffffff';
           div.style.display = 'flex';
           div.style.flexDirection = 'column';
           div.innerHTML = html;
           document.body.appendChild(div);
-          // min-height sets the content-box height, which excludes padding —
-          // subtract it so the total rendered box (content + padding) matches
-          // a full A4 page, not a full page plus an extra padding's worth.
-          const verticalPadding = parseFloat(getComputedStyle(div).paddingTop) + parseFloat(getComputedStyle(div).paddingBottom);
-          div.style.minHeight = `${div.offsetWidth * pageAspectRatio - verticalPadding}px`;
 
           // Wait for images to load
           setTimeout(async () => {
@@ -211,6 +209,9 @@ export default function ReportGeneration() {
         <div style="text-align: right; margin-bottom: 16px; font-size: 14px;"><span style="font-weight: 500;">Date: ${new Date(orderResults.orderInfo.createdAt).toLocaleDateString('en-GB')}</span></div>
       `;
 
+      // Rendered on every physical page (address footer + electronically-
+      // issued statement), like letterhead — not just the last page of the
+      // combined document.
       const reportFooterHTML = `
         <div style="border-bottom: 2px solid #666; margin: 8px 0 4px 0;"></div>
         <div style="font-size: 11px; color: #666; margin-top: 4px;"><p style="text-align: center; margin-bottom: 4px; margin-top: 0;">Electronically issued test report duly verified by pathologist, no signature required.</p><p style="text-align: center; color: #888; margin: 0;">Office No. 101, Building No. 60-C, Zulfiqar Commercial Street No. 04, Phase VIII DHA, Karachi, Pakistan</p></div>
@@ -218,7 +219,6 @@ export default function ReportGeneration() {
 
       for (let i = 0; i < orderResults.results.length; i++) {
         const result = orderResults.results[i];
-        const isLastTest = i === orderResults.results.length - 1;
         let testResultHTML = '';
 
         if (result.test?.type) {
@@ -244,23 +244,22 @@ export default function ReportGeneration() {
           testResultHTML += `<div style="margin-top: 8px; font-size: 12px;"><p><span style="font-weight: 500;">Comments:</span> ${result.comments}</p></div>`;
         }
 
+        // Patient info repeats on every test's page, not just the first —
+        // each page needs to be identifiable on its own, the same way the
+        // footer now repeats on every page.
         let pageHTML = reportHeaderHTML;
-        if (i === 0) {
-          pageHTML += patientInfoHTML;
-        }
+        pageHTML += patientInfoHTML;
         pageHTML += testResultHTML;
-        if (isLastTest) {
-          pageHTML += `<div style="margin-top: auto;">${reportFooterHTML}</div>`;
-        }
+        pageHTML += `<div style="margin-top: auto;">${reportFooterHTML}</div>`;
 
         const canvas = await renderPageInIframe(pageHTML);
         const imgData = canvas.toDataURL('image/jpeg', 0.88);
-        const imgHeight = (canvas.height * contentWidth) / canvas.width;
+        const imgHeight = (canvas.height * a4Width) / canvas.width;
 
         if (i > 0) {
           pdf.addPage();
         }
-        pdf.addImage(imgData, 'JPEG', margin, margin, contentWidth, imgHeight > 297 - (margin*2) ? 297 - (margin*2) : imgHeight);
+        pdf.addImage(imgData, 'JPEG', 0, 0, a4Width, imgHeight > a4Height ? a4Height : imgHeight);
       }
 
       const pdfDataUri = pdf.output('dataurlstring');
@@ -289,12 +288,14 @@ export default function ReportGeneration() {
         console.warn('Failed to update some results:', error);
       }
 
+      // Derive the order's status from however many of its tests now have a
+      // reported result, instead of force-closing the whole order — the
+      // remaining tests stay reportable on their own.
       const response = await fetch(`/api/orders/${orderId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          orderStatus: 'completed',
-          completedAt: new Date().toISOString()
+          recomputeStatus: true
         })
       });
 

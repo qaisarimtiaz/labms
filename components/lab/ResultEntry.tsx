@@ -38,7 +38,7 @@ interface TestOrder {
     sampleType?: string;
     reportFormat?: string;
   }[];
-  orderStatus: 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
+  orderStatus: 'pending' | 'confirmed' | 'in_progress' | 'partially_reported' | 'completed' | 'cancelled';
   priority: 'normal' | 'urgent' | 'stat';
   createdAt: string;
 }
@@ -85,7 +85,7 @@ export default function ResultEntry() {
   const fetchInProgressOrders = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/orders?orderStatus=in_progress&limit=50');
+      const response = await fetch('/api/orders?orderStatus=in_progress,partially_reported&limit=50');
       if (response.ok) {
         const data = await response.json();
         setInProgressOrders(data.orders || []);
@@ -239,6 +239,16 @@ export default function ResultEntry() {
       });
 
       if (response.ok) {
+        // Let the order status reflect however many of its tests now have a
+        // result, instead of leaving it stuck — this test alone shouldn't
+        // close the order, but it also shouldn't leave a fully-reported
+        // order sitting in in_progress forever.
+        await fetch(`/api/orders/${selectedOrder._id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recomputeStatus: true })
+        });
+
         alert('Test result submitted successfully');
         clearForm();
         fetchInProgressOrders();

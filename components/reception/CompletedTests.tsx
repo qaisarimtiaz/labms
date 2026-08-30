@@ -22,7 +22,7 @@ interface TestOrder {
     name: string;
     price?: number;
   }[];
-  orderStatus: 'completed';
+  orderStatus: 'completed' | 'partially_reported';
   priority: 'normal' | 'urgent' | 'stat';
   referredByDoctor?: string;
   totalAmount: number;
@@ -90,7 +90,10 @@ export default function CompletedTests() {
       const searchParams = new URLSearchParams({
         page: page.toString(),
         limit: ordersPerPage.toString(),
-        orderStatus: 'completed',
+        // Partially-reported orders belong here too — reception needs to be
+        // able to print and hand over whichever tests are ready, even
+        // before every test on the order is done.
+        orderStatus: 'completed,partially_reported',
         ...(search && { search }),
         ...(priority !== 'all' && { priority })
       });
@@ -235,6 +238,8 @@ export default function CompletedTests() {
         <div style="text-align: right; margin-bottom: 16px; font-size: 14px;"><span style="font-weight: 500;">Date: ${new Date(order.createdAt).toLocaleDateString('en-GB')}</span></div>
       `;
 
+      // Rendered on every physical page, letterhead-style — not gated on
+      // being the last test in the combined document.
       const reportFooterHTML = `
         <div style="border-bottom: 2px solid #666; margin: 8px 0 4px 0;"></div>
         <div style="font-size: 11px; color: #666; margin-top: 4px;"><p style="text-align: center; margin-bottom: 4px; margin-top: 0;">Electronically issued test report duly verified by pathologist, no signature required.</p><p style="text-align: center; color: #888; margin: 0;">Office No. 101, Building No. 60-C, Zulfiqar Commercial Street No. 04, Phase VIII DHA, Karachi, Pakistan</p></div>
@@ -242,7 +247,6 @@ export default function CompletedTests() {
 
       for (let i = 0; i < results.length; i++) {
         const result = results[i];
-        const isLastTest = i === results.length - 1;
         let testResultHTML = '';
 
         if (result.test?.type) {
@@ -268,14 +272,11 @@ export default function CompletedTests() {
           testResultHTML += `<div style="margin-top: 8px; font-size: 12px;"><p><span style="font-weight: 500;">Comments:</span> ${result.comments}</p></div>`;
         }
 
+        // Patient info repeats on every test's page, not just the first.
         let pageHTML = reportHeaderHTML;
-        if (i === 0) {
-          pageHTML += patientInfoHTML;
-        }
+        pageHTML += patientInfoHTML;
         pageHTML += testResultHTML;
-        if (isLastTest) {
-          pageHTML += `<div style="margin-top: auto;">${reportFooterHTML}</div>`;
-        }
+        pageHTML += `<div style="margin-top: auto;">${reportFooterHTML}</div>`;
 
         const canvas = await renderPageInIframe(pageHTML);
         const imgData = canvas.toDataURL('image/jpeg', 0.88);
@@ -332,7 +333,7 @@ export default function CompletedTests() {
         <div className="flex justify-between items-center">
           <div>
             <h3 className="text-xl font-bold text-foreground mb-1">Completed Tests</h3>
-            <p className="text-sm text-muted-foreground">View and download reports for completed lab tests</p>
+            <p className="text-sm text-muted-foreground">View and download reports for completed and partially reported lab orders</p>
           </div>
           <button
             onClick={() => fetchCompletedOrders()}
@@ -412,12 +413,23 @@ export default function CompletedTests() {
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(order.priority)}`}>
                           {order.priority.toUpperCase()}
                         </span>
+                        {order.orderStatus === 'partially_reported' ? (
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
+                            PARTIALLY REPORTED
+                          </span>
+                        ) : (
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
+                            COMPLETED
+                          </span>
+                        )}
                       </div>
                       <div className="text-sm font-medium text-gray-900">
                         {order.patient?.firstName || 'N/A'} {order.patient?.lastName || ''}
                       </div>
                       <div className="text-xs text-gray-400">
-                        Completed: {order.completedAt ? new Date(order.completedAt).toLocaleDateString() : new Date(order.createdAt).toLocaleDateString()}
+                        {order.orderStatus === 'partially_reported'
+                          ? `Ordered: ${new Date(order.createdAt).toLocaleDateString()}`
+                          : `Completed: ${order.completedAt ? new Date(order.completedAt).toLocaleDateString() : new Date(order.createdAt).toLocaleDateString()}`}
                       </div>
                     </div>
                   </td>
@@ -425,7 +437,9 @@ export default function CompletedTests() {
                   <td className="px-6 py-4">
                     <div className="space-y-1">
                       <div className="text-sm font-medium text-gray-900">
-                        {order.tests?.length || 0} test(s) completed
+                        {order.orderStatus === 'partially_reported'
+                          ? `${order.tests?.length || 0} test(s) on order — not all reported yet`
+                          : `${order.tests?.length || 0} test(s) completed`}
                       </div>
                       <div className="text-xs text-gray-600">
                         {order.tests?.slice(0, 2).map(test => test.name).join(', ')}

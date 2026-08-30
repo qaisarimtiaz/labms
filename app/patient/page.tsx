@@ -199,7 +199,6 @@ export default function PatientDashboard() {
 
       for (let i = 0; i < results.length; i++) {
         const result = results[i];
-        const isLastTest = i === results.length - 1;
         let testResultHTML = '';
 
         if (result.test?.type) {
@@ -225,14 +224,11 @@ export default function PatientDashboard() {
           testResultHTML += `<div style="margin-top: 8px; font-size: 12px;"><p><span style="font-weight: 500;">Comments:</span> ${result.comments}</p></div>`;
         }
 
+        // Patient info repeats on every test's page, not just the first.
         let pageHTML = reportHeaderHTML;
-        if (i === 0) {
-          pageHTML += patientInfoHTML;
-        }
+        pageHTML += patientInfoHTML;
         pageHTML += testResultHTML;
-        if (isLastTest) {
-          pageHTML += reportFooterHTML;
-        }
+        pageHTML += reportFooterHTML;
 
         const canvas = await renderPageInIframe(pageHTML);
         const imgData = canvas.toDataURL('image/jpeg', 0.88);
@@ -251,7 +247,6 @@ export default function PatientDashboard() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      alert('Report generated and downloaded successfully!');
 
     } catch (error) {
       console.error('Error generating patient report:', error);

@@ -22,7 +22,7 @@ interface TestOrder {
     name: string;
     price?: number;
   }[];
-  orderStatus: 'completed';
+  orderStatus: 'completed' | 'partially_reported';
   priority: 'normal' | 'urgent' | 'stat';
   referredByDoctor?: string;
   totalAmount: number;
@@ -88,7 +88,10 @@ export default function CompletedOrders() {
       const searchParams = new URLSearchParams({
         page: page.toString(),
         limit: ordersPerPage.toString(),
-        orderStatus: 'completed',
+        // Partially-reported orders belong here too — a report can be
+        // printed for whichever tests are ready even before every test on
+        // the order is done.
+        orderStatus: 'completed,partially_reported',
         ...(search && { search }),
         ...(priority !== 'all' && { priority })
       });
@@ -173,32 +176,27 @@ export default function CompletedOrders() {
       });
 
       const a4Width = 210;
-      const margin = 15;
-      const contentWidth = a4Width - (margin * 2);
-
-      // Full A4 page height (minus top/bottom margin) expressed as a ratio of the
-      // rendered width, so a page with little content still fills a full page
-      // instead of collapsing to fit just the content — that's what pins the
-      // footer to the bottom rather than right after a short table.
-      const pageAspectRatio = (297 - margin * 2) / (a4Width - margin * 2);
+      const a4Height = 297;
 
       const renderPageInIframe = (html: string): Promise<HTMLCanvasElement> => {
         return new Promise((resolve, reject) => {
           const div = document.createElement('div');
           div.style.position = 'absolute';
           div.style.left = '-9999px';
+          // border-box makes the div's rendered size exactly 210mm x >=297mm —
+          // a full A4 page with its 15mm padding acting as the page margin —
+          // so the captured canvas maps 1:1 onto the PDF page with no separate
+          // margin/ratio math needed, and a short page still fills the page
+          // height (pinning the footer to the true bottom via margin-top:auto).
+          div.style.boxSizing = 'border-box';
           div.style.width = '210mm';
+          div.style.minHeight = '297mm';
           div.style.padding = '15mm';
           div.style.backgroundColor = '#ffffff';
           div.style.display = 'flex';
           div.style.flexDirection = 'column';
           div.innerHTML = html;
           document.body.appendChild(div);
-          // min-height sets the content-box height, which excludes padding —
-          // subtract it so the total rendered box (content + padding) matches
-          // a full A4 page, not a full page plus an extra padding's worth.
-          const verticalPadding = parseFloat(getComputedStyle(div).paddingTop) + parseFloat(getComputedStyle(div).paddingBottom);
-          div.style.minHeight = `${div.offsetWidth * pageAspectRatio - verticalPadding}px`;
 
           // Wait for images to load
           setTimeout(async () => {
@@ -244,7 +242,6 @@ export default function CompletedOrders() {
 
       for (let i = 0; i < results.length; i++) {
         const result = results[i];
-        const isLastTest = i === results.length - 1;
         let testResultHTML = '';
 
         if (result.test?.type) {
@@ -270,23 +267,20 @@ export default function CompletedOrders() {
           testResultHTML += `<div style="margin-top: 8px; font-size: 12px;"><p><span style="font-weight: 500;">Comments:</span> ${result.comments}</p></div>`;
         }
 
+        // Patient info repeats on every test's page, not just the first.
         let pageHTML = reportHeaderHTML;
-        if (i === 0) {
-          pageHTML += patientInfoHTML;
-        }
+        pageHTML += patientInfoHTML;
         pageHTML += testResultHTML;
-        if (isLastTest) {
-          pageHTML += `<div style="margin-top: auto;">${reportFooterHTML}</div>`;
-        }
+        pageHTML += `<div style="margin-top: auto;">${reportFooterHTML}</div>`;
 
         const canvas = await renderPageInIframe(pageHTML);
         const imgData = canvas.toDataURL('image/jpeg', 0.88);
-        const imgHeight = (canvas.height * contentWidth) / canvas.width;
+        const imgHeight = (canvas.height * a4Width) / canvas.width;
 
         if (i > 0) {
           pdf.addPage();
         }
-        pdf.addImage(imgData, 'JPEG', margin, margin, contentWidth, imgHeight > 297 - (margin*2) ? 297 - (margin*2) : imgHeight);
+        pdf.addImage(imgData, 'JPEG', 0, 0, a4Width, imgHeight > a4Height ? a4Height : imgHeight);
       }
 
       const pdfDataUri = pdf.output('dataurlstring');
@@ -415,6 +409,15 @@ export default function CompletedOrders() {
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(order.priority)}`}>
                           {order.priority.toUpperCase()}
                         </span>
+                        {order.orderStatus === 'partially_reported' ? (
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
+                            PARTIALLY REPORTED
+                          </span>
+                        ) : (
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
+                            COMPLETED
+                          </span>
+                        )}
                       </div>
                       <div className="text-sm font-medium text-gray-900">
                         {order.patient?.firstName || 'N/A'} {order.patient?.lastName || ''}
@@ -424,11 +427,13 @@ export default function CompletedOrders() {
                       </div>
                     </div>
                   </td>
-                  
+
                   <td className="px-6 py-4">
                     <div className="space-y-1">
                       <div className="text-sm font-medium text-gray-900">
-                        {order.tests?.length || 0} test(s) completed
+                        {order.orderStatus === 'partially_reported'
+                          ? `${order.tests?.length || 0} test(s) on order — not all reported yet`
+                          : `${order.tests?.length || 0} test(s) completed`}
                       </div>
                       <div className="text-xs text-gray-600">
                         {order.tests?.slice(0, 2).map(test => test.name).join(', ')}

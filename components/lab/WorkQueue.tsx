@@ -39,8 +39,9 @@ export default function WorkQueue() {
       if (filter !== 'all') {
         url += `orderStatus=${filter}&`;
       } else {
-        // Only show active orders, not completed ones
-        url += 'orderStatus=pending,confirmed,in_progress&';
+        // Only show active orders, not completed ones — a partially-reported
+        // order still has tests left to process, so it stays active here too.
+        url += 'orderStatus=pending,confirmed,in_progress,partially_reported&';
       }
 
       const response = await fetch(url);
@@ -86,6 +87,7 @@ export default function WorkQueue() {
       pending: 'bg-yellow-100 text-yellow-800',
       confirmed: 'bg-blue-100 text-blue-800',
       in_progress: 'bg-purple-100 text-purple-800',
+      partially_reported: 'bg-amber-100 text-amber-800',
       completed: 'bg-green-100 text-green-800'
     };
     return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800';
